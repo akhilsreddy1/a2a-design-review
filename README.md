@@ -265,10 +265,11 @@ cp .env.example .env
 # AGENT_HOST / AGENT_PUBLIC_HOST are already correct for Docker.
 
 # 2. Start the LiteLLM hub first — its own stack (see litellm-stack/README.md):
-#      (cd litellm-stack && cp .env.example .env && docker compose up -d)
+
+cd litellm-stack && cp .env.example .env && docker compose up -d
 curl -sf http://localhost:4000/health/readiness && echo OK
 
-# 3. Build + run everything in containers
+# 3. Build + run everything in containers --> All agents,bridge, UI
 docker compose up -d --build
 ```
 
@@ -382,7 +383,7 @@ sequenceDiagram
 
     Note over Orch: Step 4 — Invoke agent (direct A2A stream)
     Orch->>Agent: POST /a2a<br/>method=message/stream<br/>+ x-deadline-remaining
-    Note over Orch,Agent: stream_agent() bypasses LiteLLM for true deltas;<br/>falls back to LiteLLM message/send if unreachable
+    Note over Orch,Agent: stream_agent() bypasses LiteLLM for true deltas<br/>falls back to LiteLLM message/send if unreachable
 
     Note over Agent: SpecialistAgentExecutor.execute()<br/>async with deadline(caller_remaining)
     Agent->>LiteLLM: POST /v1/chat/completions<br/>{model: claude, stream: true}<br/>timeout = remaining_or(LLM_TIMEOUT)
@@ -508,34 +509,6 @@ sequenceDiagram
     Note over UI: Main panel = security synthesis<br/>Collapsible panel under security → performance handoff
 ```
 
-### Consistency with Diagram 1 and Overall Architecture
-
-| Concern | Diagram 1 (basic) | Diagram 2 (peer) | Same? |
-|---------|-------------------|------------------|-------|
-| **Top-level agent invoke** | `stream_agent()` → direct `POST {agent_url}/a2a` `message/stream` | Security invoked the same way — **not** via LiteLLM | ✓ |
-| **Peer invoke** | N/A | `consult_peer()` → `A2AClient.stream()` → LiteLLM `/v1/a2a/{peer}/message/send` | ✓ |
-| **Root deadline** | `async with deadline()` on `POST /api/run` | Same | ✓ |
-| **Peer tokens to UI** | N/A | `report_token()` → `POST /api/events` → bus → SSE (peer span) | ✓ |
-| **Routed agent tokens to UI** | `emit_token()` from orchestrator span | Security deltas from `stream_agent()` → `emit_token()` (security span) | ✓ |
-| **Two token sinks in UI** | Main answer only | Main = security span; peer panel = performance `to_span_id` | ✓ |
-
-**Intentional asymmetry:** the orchestrator talks **direct A2A** to the routed agent; agents talk **through LiteLLM** when consulting peers. Both use native A2A JSON-RPC — not `chat/completions model=a2a/...` unless `A2AClient(transport="openai")` is configured.
-
-**Framework difference vs a2a-sdk peer caller:** `developer` uses an OpenAI-style tool loop in `base_server.py`; `security` uses ADK's `FunctionTool` wrapper around the same `common/peer_client.consult_peer()`. The peer hop and observability path are identical once `consult_peer()` runs.
-
-### What happens at each layer
-
-| Step | Bridge | Bus | Agent | LiteLLM |
-|------|--------|-----|-------|---------|
-| **1. Query arrives** | `POST /api/run` → `ExecutionContext.new_root()` → `async with deadline()` → fire-and-forget task | — | — | — |
-| **2. Discovery** | `RouterOrchestrator` fetches cards (respects `remaining_or()`) | — | — | `GET /public/agent_hub` returns registered agents |
-| **3. Routing** | `Classifier.route()` asks the LLM (or uses `pinned_agent` if set) | — | — | `POST /v1/chat/completions` with router-model |
-| **4. Handoff** | Emits `workflow_started` + `agent_handoff` (with `to_span_id`) + `agent_started` | Fans out to SSE, JSONL, console | — | — |
-| **5. Routed invocation** | `A2AClient.stream_agent()` → direct `message/stream` on agent URL; each delta → `emit_token()` | `token_stream` on orchestrator/agent span | `execute()` under `effective_deadline()`; LLM via `stream_complete()` | Fallback only: `message/send` via LiteLLM Agent Gateway |
-| **6. Peer call** | Receives nested lifecycle + **token** events via `POST /api/events` | Republishes handoff / started / **token_stream** / completed | `consult_peer()` → `A2AClient.stream()` through **LiteLLM Agent Gateway**; `report_token()` per chunk | Proxies `a2a/<peer>` to peer agent; propagates deadline header/metadata |
-| **7. UI render** | SSE subscriber filters by `conversation_id` | All events fan out | — | — |
-| **8. Completion** | Emits `agent_completed` + `workflow_completed` (or `agent_failed` on deadline/error) | Fans out final events | Returns artifact + completed status | — |
-
 ---
 
 ## Topology: two independent Compose stacks
@@ -586,7 +559,7 @@ one-time LiteLLM setup (`cp .env.example .env` → `docker compose up -d`).
 
 - **Each agent is a real A2A server** — three frameworks, one protocol:
   - **Four agents** use `a2a-sdk[http-server]` directly:
-    `DefaultRequestHandler` + `InMemoryTaskStore` + our
+    `DefaultRequestHandler` + `InMemoryTaskStore` + a
     `SpecialistAgentExecutor` (translates A2A `RequestContext` → LLM
     call via LiteLLM → lifecycle events via `TaskUpdater`)
   - **Performance agent** uses **LangGraph** — a compiled `StateGraph`
@@ -696,7 +669,7 @@ consult_peer("security", q)
   └─ return assembled answer to tool loop
 ```
 
-This replaces the reference architecture's `FlowLogSource` (which tailed a shared file) with HTTP — no shared volumes, works across containers. Peer **tokens** are streamed the same way as lifecycle events: each chunk is a `TokenStreamEvent` stamped with the peer's `span_id`, correlated in the UI via the handoff's `to_span_id`.
+Using HTTP rather than a shared file or volume means this works across containers. Peer **tokens** are streamed the same way as lifecycle events: each chunk is a `TokenStreamEvent` stamped with the peer's `span_id`, correlated in the UI via the handoff's `to_span_id`.
 
 ---
 
@@ -758,7 +731,7 @@ LiteLLM (gateway) → peer agent → LiteLLM (peer's LLM call) → peer agent
 
 ## Cross-framework interop: three frameworks, one protocol
 
-This is the whole point of the project. The six agents are built across
+The six agents are built across
 **three different agent frameworks**, and nothing downstream — not
 LiteLLM, not the router, not the UI, not the other agents — can tell
 which is which. The A2A protocol is the seam that makes the framework an
@@ -1171,7 +1144,7 @@ Examples:
 
 ---
 
-## Gotchas we hit while bringing this up
+## Gotchas
 
 - **`temperature` is deprecated on some new Claude models** (e.g. Opus
   4.7 reasoning model). [`common/llm_client.py`](common/llm_client.py)

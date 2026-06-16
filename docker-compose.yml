@@ -14,7 +14,7 @@
 #
 #  Usage:
 #    docker compose up -d --build       # build + start everything
-#    docker compose logs -f             # follow logs
+#    docker compose up -d && docker compose logs -f  # start everything and follow logs
 #    docker compose ps                  # status + health
 #    docker compose down                # stop + remove
 # =============================================================================
@@ -192,3 +192,24 @@ services:
       retries: 1
       start_period: 8s
     restart: unless-stopped
+
+  # ---------- one-shot agent registration --------------------------------
+  # Waits for every agent to be healthy, upserts each Agent Card into the
+  # LiteLLM registry (idempotent: POST /v1/agents, 409 -> PUT), then exits.
+  # Runs automatically on `docker compose up`; re-run on demand with
+  # `docker compose run --rm register`.
+  register:
+    <<: [*image, *host-bridge]
+    container_name: maa-register
+    command: ["python", "-m", "scripts.register_with_litellm"]
+    env_file: .env
+    environment:
+      <<: *container-env
+    depends_on:
+      developer:     { condition: service_healthy }
+      testing:       { condition: service_healthy }
+      devops:        { condition: service_healthy }
+      code_reviewer: { condition: service_healthy }
+      performance:   { condition: service_healthy }
+      security:      { condition: service_healthy }
+    restart: "no"
