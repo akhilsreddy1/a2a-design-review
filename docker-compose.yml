@@ -1,0 +1,194 @@
+# =============================================================================
+#  Multi-Agent A2A — Docker Compose stack
+#
+#  What this brings up:
+#    - 6 specialist agents (one container each, same image, different command)
+#      * developer / testing / devops / code_reviewer  — native a2a-sdk
+#      * performance                                    — LangGraph
+#      * security                                       — Google ADK
+#    - bridge: event bus + orchestration + the React UI on http://localhost:8080.
+#
+#  What this does NOT bring up:
+#    - LiteLLM. It runs in its own Compose stack (see README §"Run LiteLLM in
+#      Docker") and is reached over `host.docker.internal:4000`.
+#
+#  Usage:
+#    docker compose up -d --build       # build + start everything
+#    docker compose logs -f             # follow logs
+#    docker compose ps                  # status + health
+#    docker compose down                # stop + remove
+# =============================================================================
+
+# ----- Shared environment overrides --------------------------------------
+# These are the values that MUST change vs. the bare-host .env:
+#   - bind on all interfaces inside the container
+#   - advertise URLs that LiteLLM (also containerized, in another stack)
+#     can reach via host.docker.internal:<published-port>
+#   - call LiteLLM via host.docker.internal:4000
+x-container-env: &container-env
+  agent_host: "0.0.0.0"
+  agent_public_host: "host.docker.internal"
+  litellm_base_url: "http://host.docker.internal:4000"
+  # Agents POST nested observability events to the bridge's /api/events.
+  # The bridge is published on the host at :8080, reachable from agent
+  # containers via host.docker.internal. Without this, reporter POSTs hit
+  # the agent's OWN localhost:8080 and silently fail.
+  bridge_url: "http://host.docker.internal:8080"
+
+# Every service uses the same image and reaches host services the same way.
+x-image: &image
+  image: multi-agent-a2a:latest
+  build:
+    context: .
+    dockerfile: Dockerfile
+
+x-host-bridge: &host-bridge
+  # `host-gateway` makes host.docker.internal resolve on Linux as well as
+  # Mac/Windows. Harmless on Mac/Windows (Docker Desktop already provides it).
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+
+services:
+  # ---------- a2a-sdk agents (Framework 1) -------------------------------
+
+  developer:
+    <<: [*image, *host-bridge]
+    container_name: maa-developer
+    command: ["python", "-m", "agents.developer_server"]
+    env_file: .env
+    environment:
+      <<: *container-env
+      developer_port: "9101"
+    ports: ["9101:9101"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9101/healthz"]
+      interval: 300s
+      timeout: 3s
+      retries: 1
+      start_period: 8s
+    restart: unless-stopped
+
+  testing:
+    <<: [*image, *host-bridge]
+    container_name: maa-testing
+    command: ["python", "-m", "agents.testing_server"]
+    env_file: .env
+    environment:
+      <<: *container-env
+      testing_port: "9104"
+    ports: ["9104:9104"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9104/healthz"]
+      interval: 300s
+      timeout: 3s
+      retries: 1
+      start_period: 8s
+    restart: unless-stopped
+
+  devops:
+    <<: [*image, *host-bridge]
+    container_name: maa-devops
+    command: ["python", "-m", "agents.devops_server"]
+    env_file: .env
+    environment:
+      <<: *container-env
+      devops_port: "9105"
+    ports: ["9105:9105"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9105/healthz"]
+      interval: 300s
+      timeout: 3s
+      retries: 1
+      start_period: 8s
+    restart: unless-stopped
+
+  code_reviewer:
+    <<: [*image, *host-bridge]
+    container_name: maa-code-reviewer
+    command: ["python", "-m", "agents.code_reviewer_server"]
+    env_file: .env
+    environment:
+      <<: *container-env
+      code_reviewer_port: "9106"
+    ports: ["9106:9106"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9106/healthz"]
+      interval: 300s
+      timeout: 3s
+      retries: 1
+      start_period: 8s
+    restart: unless-stopped
+
+  # ---------- LangGraph agent (Framework 3) ------------------------------
+
+  performance:
+    <<: [*image, *host-bridge]
+    container_name: maa-performance
+    command: ["python", "-m", "agents.performance_langgraph_server"]
+    env_file: .env
+    environment:
+      <<: *container-env
+      performance_port: "9103"
+    ports: ["9103:9103"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9103/healthz"]
+      interval: 300s
+      timeout: 3s
+      retries: 1
+      start_period: 10s
+    restart: unless-stopped
+
+  # ---------- Google ADK agent (Framework 2) -----------------------------
+
+  security:
+    <<: [*image, *host-bridge]
+    container_name: maa-security
+    command: ["python", "-m", "agents.security_adk_server"]
+    env_file: .env
+    environment:
+      <<: *container-env
+      security_port: "9102"
+    ports: ["9102:9102"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9102/healthz"]
+      interval: 300s
+      timeout: 3s
+      retries: 1
+      start_period: 15s        # ADK init is a bit slower
+    restart: unless-stopped
+
+  # ---------- Event-driven bridge + React UI -----------------------------
+  # Owns the event bus + orchestration AND serves the built React UI
+  # (frontend/dist) at the root. One process, one port:
+  #   GET /                            → the SPA
+  #   GET /api/agents                  → roster
+  #   POST /api/run                    → start a run (202)
+  #   GET /api/stream/{conversation_id} → typed SSE events
+  # Nothing bypasses the bus. Open the app at http://localhost:8080
+
+  bridge:
+    <<: [*image, *host-bridge]
+    container_name: maa-bridge
+    command:
+      - "uvicorn"
+      - "api.server:app"
+      - "--host=0.0.0.0"
+      - "--port=8080"
+    env_file: .env
+    environment:
+      <<: *container-env
+      a2a_trace_dir: "/app/.data/traces"
+    # Bind-mount .data so the durable JSONL trace history is written to the
+    # HOST (./.data/traces/{conversation}/{trace}.jsonl) and survives container
+    # recreation — otherwise traces live only in the container's ephemeral layer.
+    volumes:
+      - ./.data:/app/.data
+    ports: ["8080:8080"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/healthz"]
+      interval: 300s
+      timeout: 3s
+      retries: 1
+      start_period: 8s
+    restart: unless-stopped

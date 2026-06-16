@@ -1,0 +1,27 @@
+# LiteLLM proxy config — the A2A registry + LLM gateway the agents call through.
+#
+# Secrets are referenced via os.environ/<VAR> and supplied through .env
+# (copy .env.example -> .env). NEVER hard-code keys in this file.
+
+model_list:
+  - model_name: claude-opus-4-7
+    litellm_params:
+      model: claude-opus-4-7
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: claude-opus-4-6
+    litellm_params:
+      model: claude-opus-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: claude-sonnet-4-6
+    litellm_params:
+      model: claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: claude-haiku-4-5-20251001
+    litellm_params:
+      model: claude-haiku-4-5-20251001
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+general_settings:
+  # Clients (agents, router, UI) authenticate to the proxy with this key.
+  # Supplied via LITELLM_MASTER_KEY in .env — never hard-code it here.
+  master_key: os.environ/LITELLM_MASTER_KEY

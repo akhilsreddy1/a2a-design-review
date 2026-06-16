@@ -1,0 +1,55 @@
+# Don't bake secrets, build artifacts, or local-only state into the image.
+
+# Secrets
+.env
+.env.local
+*.pem
+*.key
+*.crt
+
+# Python build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Frontend — node_modules and the local build are rebuilt fresh in the Node
+# stage; keep them out of the build context.
+frontend/node_modules/
+frontend/dist/
+node_modules/
+
+# Local runtime state
+logs/
+run/
+.data/
+
+# VCS
+.git/
+.gitignore
+.github/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Docs we don't need in the image
+MEDIUM_POST.md

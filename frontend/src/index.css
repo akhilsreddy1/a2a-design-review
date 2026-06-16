@@ -1,0 +1,125 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces — warm white with rosy undertone */
+  --bg: #faf5f7;
+  --bg-elev: #ffffff;
+  --bg-elev-2: #f3eef1;
+  --bg-elev-3: #ece5ea;
+
+  /* Borders — pink-tinted neutrals */
+  --border: #e8dde3;
+  --border-strong: #d4c6ce;
+
+  /* Text — deep plum for warmth */
+  --text: #2d1f2e;
+  --text-muted: #6b5570;
+  --text-faint: #a496a8;
+
+  /* Accents */
+  --pill-bg: #f3edf1;
+  --danger: #e5384b;
+  --ok: #12b886;
+  --accent: #e8457c;
+  --accent-2: #a855f7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
+}
+
+/* Two-tone gradient — pink top-left, violet top-right, fading to white */
+#root {
+  background:
+    radial-gradient(ellipse 60% 45% at 10% 0%, color-mix(in srgb, var(--accent) 7%, transparent) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 90% 0%, color-mix(in srgb, var(--accent-2) 5%, transparent) 0%, transparent 60%),
+    var(--bg);
+}
+
+.mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-feature-settings: "liga" 1, "calt" 1;
+}
+
+/* Elevated surfaces get a soft shadow instead of just borders */
+.glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Flow-track connector fill transition */
+.connector {
+  background: var(--border);
+  position: relative;
+  overflow: hidden;
+  border-radius: 999px;
+}
+.connector::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: var(--fill, 0%);
+  background: linear-gradient(90deg, var(--accent), var(--ok));
+  transition: width 0.4s ease;
+  border-radius: inherit;
+}
+
+/* Scrollbar — thin and subtle */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+}
+
+/* Input focus ring — pink glow */
+input:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+  outline: none;
+}
+
+/* Buttons — subtle hover lift */
+button:not(:disabled) {
+  transition: transform 0.1s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+button:not(:disabled):hover {
+  transform: translateY(-0.5px);
+  filter: brightness(1.02) saturate(1.05);
+}
+button:not(:disabled):active {
+  transform: translateY(0.5px);
+}
+
+/* Selection color — pink accent */
+::selection {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}

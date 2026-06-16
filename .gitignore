@@ -1,0 +1,72 @@
+# ============================================================================
+#  Secrets — NEVER commit. Use .env.example as the template.
+# ============================================================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.crt
+*.p12
+*credentials*
+*secret*
+!.env.example
+
+# ============================================================================
+#  Runtime artifacts / local state
+# ============================================================================
+logs/
+run/
+.data/
+*.log
+litellm.db
+litellm_db_data/
+temp/
+temp
+
+# ============================================================================
+#  Python
+# ============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# ============================================================================
+#  Node / frontend
+# ============================================================================
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+medium/
+medium_*.md
+# ============================================================================
+#  IDE / editor / OS
+# ============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
