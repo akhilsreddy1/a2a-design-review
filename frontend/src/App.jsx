@@ -21,6 +21,7 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState(null)
   const [pinnedAgent, setPinnedAgent] = useState(null) // null = auto-route
   const [debate, setDebate] = useState(false)          // structured multi-turn debate
+  const [debateTurns, setDebateTurns] = useState(5)    // debate turn budget
 
   const [peerTokens, setPeerTokens] = useState({}) // spanId -> "accumulated text"
   const peerSpanIds = useRef(new Set())             // span IDs belonging to peer handoffs
@@ -243,10 +244,10 @@ export default function App() {
         sessionId: sessionId.current,
         pinnedAgent: debate ? null : pinnedAgent, // debate ignores routing/pin
         mode: debate ? 'debate' : 'route',
-        turns: debate ? 5 : undefined,
+        turns: debate ? debateTurns : undefined,
       })
     },
-    [running, resetState, startStream, pinnedAgent, debate],
+    [running, resetState, startStream, pinnedAgent, debate, debateTurns],
   )
 
   const handleNewRun = useCallback(() => {
@@ -302,7 +303,9 @@ export default function App() {
           running={running}
           onRun={handleRun}
           debate={debate}
-          onToggleDebate={() => setDebate((d) => !d)}
+          onSetDebate={setDebate}
+          turns={debateTurns}
+          onSetTurns={setDebateTurns}
         />
       </div>
 

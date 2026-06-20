@@ -25,13 +25,6 @@ developer for a JWT auth design and it phones security (the ADK agent)
 for the threat input before answering — crossing the framework boundary
 transparently.
 
-![Debate mode — a design vetted by the specialist panel, streamed live](docs/debate-mode.png)
-
-> *Debate mode: a design is debated by the whole specialist panel over multiple
-> turns — opening positions, targeted rounds on the genuine tensions, and final
-> stances — streamed live, each reviewer's contribution in its own collapsible
-> panel, ending in a synthesized review report.*
-
 ### End-state topology
 
 At a glance — three agent frameworks, one LiteLLM hub, one React console:
@@ -738,6 +731,8 @@ LiteLLM (gateway) → peer agent → LiteLLM (peer's LLM call) → peer agent
 
 ## Debate mode
 
+![Debate mode — a design vetted by the specialist panel, streamed live](docs/debate-mode.png)
+
 Alongside the single-shot router, the platform ships a second, opt-in
 orchestrator: **`DebateOrchestrator`** ([`router/debate.py`](router/debate.py)).
 It runs a *structured multi-turn design-review debate* — the whole specialist
@@ -745,6 +740,13 @@ panel argues a design and produces one synthesized report. It is a **sibling**
 of `RouterOrchestrator`: same registry, same agents, same event bus, and it
 changes no agent. The UI exposes it as the **⚖ Debate** toggle; under the hood
 it is `mode="debate"` on `POST /api/run`.
+
+
+> *Debate mode: a design is debated by the whole specialist panel over multiple
+> turns — opening positions, targeted rounds on the genuine tensions, and final
+> stances — streamed live, each reviewer's contribution in its own collapsible
+> panel, ending in a synthesized review report.*
+
 
 **Hybrid — code drives, the LLM judges.** Deterministic code owns the protocol
 skeleton (phases, turn budget, parallel invocation, event emission, transcript
