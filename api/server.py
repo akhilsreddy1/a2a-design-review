@@ -54,6 +54,7 @@ from observability.subscribers.jsonl import JsonlTraceWriter
 from observability.subscribers.sse import SSEConnection
 from registry import LiteLLMRegistry
 from router.orchestrator import RouterOrchestrator
+from router.debate import DebateOrchestrator
 
 from common.log import setup as _setup_logging
 _setup_logging()
@@ -121,6 +122,24 @@ async def run_orchestration(ctx: ExecutionContext, query: str, pinned_agent: str
         await emit_workflow_completed(ctx, summary=f"Unhandled error: {exc}"[:400])
 
 
+async def run_debate(ctx: ExecutionContext, design: str, turns: int) -> None:
+    """Run a structured design-review debate (hybrid orchestrator). The overall
+    budget is sized for many reviewer/judge calls; each call self-limits."""
+    from common.deadline import DeadlineExceeded, deadline
+    from observability.emitters import emit_agent_failed, emit_workflow_completed
+    try:
+        async with deadline(max(300, turns * 200)):
+            await DebateOrchestrator().run(ctx, design, max_turns=turns)
+    except DeadlineExceeded:
+        logger.warning("debate.deadline_exceeded trace_id=%s", ctx.trace_id)
+        await emit_agent_failed(ctx, ORCHESTRATOR_ID, error="debate deadline exceeded")
+        await emit_workflow_completed(ctx, summary="Debate deadline exceeded")
+    except Exception as exc:
+        logger.exception("debate.unhandled trace_id=%s", ctx.trace_id)
+        await emit_agent_failed(ctx, ORCHESTRATOR_ID, error=str(exc)[:500])
+        await emit_workflow_completed(ctx, summary=f"Unhandled error: {exc}"[:400])
+
+
 async def run_endpoint(request: Request) -> JSONResponse:
     """Start a run. Body: {query, conversation_id?, session_id?, user_id?,
     tenant_id?, pinned_agent?}. Returns 202 with the correlation ids; events
@@ -133,15 +152,19 @@ async def run_endpoint(request: Request) -> JSONResponse:
     if not query:
         return JSONResponse({"error": "Missing 'query'."}, status_code=400)
 
+    mode = (body.get("mode") or "route").strip().lower()
     ctx = ExecutionContext.new_root(
         conversation_id=body.get("conversation_id"),
         session_id=body.get("session_id"),
         user_id=body.get("user_id"),
         tenant_id=body.get("tenant_id"),
-        workflow_name="router",
+        workflow_name="debate" if mode == "debate" else "router",
     )
-    pinned_agent = body.get("pinned_agent") or None
-    asyncio.create_task(run_orchestration(ctx, query, pinned_agent))
+    if mode == "debate":
+        asyncio.create_task(run_debate(ctx, query, int(body.get("turns") or 6)))
+    else:
+        pinned_agent = body.get("pinned_agent") or None
+        asyncio.create_task(run_orchestration(ctx, query, pinned_agent))
     return JSONResponse(
         {
             "conversation_id": ctx.conversation_id,

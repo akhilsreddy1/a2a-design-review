@@ -1,6 +1,4 @@
-# LiteLLM hub — runs as its own stack (LiteLLM + Postgres) on port 4000,
-# separate from the agents so it stays up while you rebuild agent containers.
-#
+# LiteLLM hub — runs as its own stack (LiteLLM + Postgres) on port 4000,#
 #   cp .env.example .env   # set LITELLM_MASTER_KEY + ANTHROPIC_API_KEY
 #   docker compose up -d
 

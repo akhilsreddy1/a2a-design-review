@@ -20,6 +20,7 @@ export default function App() {
   const [elapsed, setElapsed] = useState(0)
   const [errorMsg, setErrorMsg] = useState(null)
   const [pinnedAgent, setPinnedAgent] = useState(null) // null = auto-route
+  const [debate, setDebate] = useState(false)          // structured multi-turn debate
 
   const [peerTokens, setPeerTokens] = useState({}) // spanId -> "accumulated text"
   const peerSpanIds = useRef(new Set())             // span IDs belonging to peer handoffs
@@ -153,7 +154,10 @@ export default function App() {
               toSpanId: ev.to_span_id || null,
             },
           ])
-          if (ev.method === 'peer' && ev.to_span_id) {
+          // Peer consults AND debate reviewer turns render under their handoff
+          // line, keyed by to_span_id — their tokens go to per-span panels, not
+          // the main answer (the debate's final report streams to the main panel).
+          if ((ev.method === 'peer' || ev.method === 'debate') && ev.to_span_id) {
             peerSpanIds.current.add(ev.to_span_id)
           }
           setActiveAgent(ev.to_agent)
@@ -237,10 +241,12 @@ export default function App() {
         query: trimmed,
         conversationId,
         sessionId: sessionId.current,
-        pinnedAgent,
+        pinnedAgent: debate ? null : pinnedAgent, // debate ignores routing/pin
+        mode: debate ? 'debate' : 'route',
+        turns: debate ? 5 : undefined,
       })
     },
-    [running, resetState, startStream, pinnedAgent],
+    [running, resetState, startStream, pinnedAgent, debate],
   )
 
   const handleNewRun = useCallback(() => {
@@ -292,7 +298,12 @@ export default function App() {
           frozenAnswer={frozenAnswer}
         />
         <FlowTrack blocks={vHandoffs} status={vStatus} activeAgent={vActiveAgent} agentById={agentById} />
-        <InputRow running={running} onRun={handleRun} />
+        <InputRow
+          running={running}
+          onRun={handleRun}
+          debate={debate}
+          onToggleDebate={() => setDebate((d) => !d)}
+        />
       </div>
 
       {/* Right status panel */}

@@ -7,7 +7,7 @@
 // auto-reconnect on a transient drop. Nothing bypasses the bus: every event
 // the UI renders was published by orchestration onto the central event bus.
 export function useAgentStream(onEvent) {
-  return ({ query, conversationId, sessionId, pinnedAgent }) => {
+  return ({ query, conversationId, sessionId, pinnedAgent, mode, turns }) => {
     const es = new EventSource(`/api/stream/${encodeURIComponent(conversationId)}`)
     let started = false
 
@@ -22,6 +22,8 @@ export function useAgentStream(onEvent) {
           conversation_id: conversationId,
           session_id: sessionId,
           pinned_agent: pinnedAgent || null,
+          mode: mode || 'route',
+          turns: turns || undefined,
         }),
       })
         .then((r) => {

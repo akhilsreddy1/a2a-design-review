@@ -25,6 +25,13 @@ developer for a JWT auth design and it phones security (the ADK agent)
 for the threat input before answering — crossing the framework boundary
 transparently.
 
+![Debate mode — a design vetted by the specialist panel, streamed live](docs/debate-mode.png)
+
+> *Debate mode: a design is debated by the whole specialist panel over multiple
+> turns — opening positions, targeted rounds on the genuine tensions, and final
+> stances — streamed live, each reviewer's contribution in its own collapsible
+> panel, ending in a synthesized review report.*
+
 ### End-state topology
 
 At a glance — three agent frameworks, one LiteLLM hub, one React console:
@@ -729,6 +736,55 @@ LiteLLM (gateway) → peer agent → LiteLLM (peer's LLM call) → peer agent
 
 ---
 
+## Debate mode
+
+Alongside the single-shot router, the platform ships a second, opt-in
+orchestrator: **`DebateOrchestrator`** ([`router/debate.py`](router/debate.py)).
+It runs a *structured multi-turn design-review debate* — the whole specialist
+panel argues a design and produces one synthesized report. It is a **sibling**
+of `RouterOrchestrator`: same registry, same agents, same event bus, and it
+changes no agent. The UI exposes it as the **⚖ Debate** toggle; under the hood
+it is `mode="debate"` on `POST /api/run`.
+
+**Hybrid — code drives, the LLM judges.** Deterministic code owns the protocol
+skeleton (phases, turn budget, parallel invocation, event emission, transcript
+capping, anti-domination); the LLM is called only for the judgment steps:
+
+1. **Opening positions** — every reviewer is invoked in parallel for its top
+   concerns, top strength, a 1–10 score, and the assumption that would change
+   its view.
+2. **Tension detection** *(LLM judge)* — surfaces genuine disagreements
+   (different concerns, scores ≥3 apart, contradictory assumptions).
+3. **Debate rounds** *(LLM-paired, not round-robin)* — for each consequential
+   tension, the two reviewers who own the conflicting positions answer a
+   specific question; the judge marks the tension **resolved / refined /
+   entrenched**.
+4. **Convergence** — each reviewer states what changed its mind, what it still
+   believes, and a final score.
+5. **Report synthesis** *(LLM)* — one Markdown report: consensus, genuine
+   (unresolved) disagreements, stress tests, prioritized changes (P0/P1/P2),
+   open questions, and a debate self-assessment. Every quote is grounded in a
+   captured transcript, not the model's memory.
+
+Reviewers are invoked **unchanged** over A2A; the per-turn prompt asks them for a
+structured response (stance · score · what-would-change-my-mind) which the
+orchestrator parses. In the UI each reviewer contribution streams into its own
+collapsible panel; the final report streams to the main answer panel.
+
+```bash
+# trigger a debate from the API (or just use the ⚖ Debate toggle in the UI)
+curl -s -X POST http://localhost:8080/api/run \
+     -H 'Content-Type: application/json' \
+     -d '{"query":"<your design text>","mode":"debate","turns":5}'
+```
+
+Pick a design with a **real trade-off** — e.g. *"keep all game state in-memory on
+one server, flush to Postgres only when the match ends, trading durability for
+latency."* Uniformly-good or uniformly-bad designs surface few tensions (the
+panel simply agrees), which is the honest outcome by design.
+
+---
+
 ## Cross-framework interop: three frameworks, one protocol
 
 The six agents are built across
@@ -880,7 +936,8 @@ multi-agent-a2a/
 │   └── security_server.py         — (legacy) native a2a-sdk, kept as reference
 ├── router/
 │   ├── classifier.py        — LLM routing + keyword fallback (used by orchestrator)
-│   └── orchestrator.py      — RouterOrchestrator: discover → route → invoke → emit
+│   ├── orchestrator.py      — RouterOrchestrator: discover → route → invoke → emit
+│   └── debate.py            — DebateOrchestrator: multi-turn panel debate + report
 ├── observability/
 │   ├── context.py           — ExecutionContext (session → trace → span) + contextvar
 │   ├── events.py            — typed event model (Pydantic BaseEvent hierarchy)

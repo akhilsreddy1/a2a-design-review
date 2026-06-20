@@ -7,8 +7,8 @@ function Dot({ color, icon }) {
 }
 
 // Collapsible peer answer that sits under a peer handoff line.
-function PeerAnswer({ text, agentLabel, color, icon }) {
-  const [open, setOpen] = useState(false)
+function PeerAnswer({ text, agentLabel, color, icon, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen)
   if (!text) return null
 
   const preview = text.slice(0, 120).replace(/\n/g, ' ').trim()
@@ -90,6 +90,7 @@ function HandoffLine({ handoff, agentById, status, activeAgent, peerText }) {
   const isActive = activeAgent === handoff.to && toState !== 'done'
   const conf = typeof handoff.confidence === 'number' ? handoff.confidence.toFixed(2) : null
   const isPeer = handoff.method === 'peer'
+  const isDebate = handoff.method === 'debate'
 
   return (
     <div className="flex animate-fade-up flex-col gap-0.5 py-1">
@@ -129,8 +130,14 @@ function HandoffLine({ handoff, agentById, status, activeAgent, peerText }) {
           {handoff.reason}
         </div>
       )}
-      {isPeer && peerText && (
-        <PeerAnswer text={peerText} agentLabel={to?.label || handoff.to} color={to?.color} icon={to?.icon} />
+      {(isPeer || isDebate) && peerText && (
+        <PeerAnswer
+          text={peerText}
+          agentLabel={to?.label || handoff.to}
+          color={to?.color}
+          icon={to?.icon}
+          defaultOpen={isDebate}
+        />
       )}
     </div>
   )
